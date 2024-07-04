@@ -1,0 +1,120 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def clean_data(df):
+  """
+  Cleans the data by filtering out incorrect measurements.
+
+  Args:
+      df: Pandas DataFrame containing medical examination data.
+
+  Returns:
+      A Pandas DataFrame with cleaned data.
+  """
+
+  # Filter out incorrect data
+  return df[
+      (df['ap_lo'] <= df['ap_hi']) &  # Diastolic pressure <= systolic pressure
+      (df['height'] >= df['height'].quantile(0.025)) &  # Height above 2.5th percentile
+      (df['height'] <= df['height'].quantile(0.975)) &  # Height below 97.5th percentile
+      (df['weight'] >= df['weight'].quantile(0.025)) &  # Weight above 2.5th percentile
+      (df['weight'] <= df['weight'].quantile(0.975))  # Weight below 97.5th percentile
+  ]
+
+def calculate_bmi(df):
+  """
+  Calculates the Body Mass Index (BMI) for each patient.
+
+  Args:
+      df: Pandas DataFrame containing medical examination data.
+
+  Returns:
+      A Pandas DataFrame with a new 'bmi' column.
+  """
+
+  df['bmi'] = df['weight'] / (df['height'] / 100) ** 2
+  return df
+
+def normalize_data(df):
+  """
+  Normalizes cholesterol and glucose values (0: good, 1: bad).
+
+  Args:
+      df: Pandas DataFrame containing medical examination data.
+
+  Returns:
+      A Pandas DataFrame with normalized cholesterol and glucose columns.
+  """
+
+  df['cholesterol'] = df['cholesterol'].replace([2, 3], 1)
+  df['gluc'] = df['gluc'].replace([2, 3], 1)
+  return df
+
+def draw_cat_plot(df):
+  """
+  Creates a categorical plot showing value counts for features split by cardio.
+
+  Args:
+      df: Pandas DataFrame containing medical examination data.
+
+  Returns:
+      A seaborn catplot figure.
+  """
+
+  df_cat = pd.melt(df, id_vars=['cardio'], var_name='feature', value_name='value')
+  df_cat = df_cat.groupby(['cardio', 'feature'])['value'].count().unstack(fill_value=0)
+
+  fig = sns.catplot(
+      x='feature',
+      y='value',
+      hue='cardio',
+      data=df_cat,
+      kind='bar',
+      col='cardio',
+      row='cardio',
+      sharex=False
+  )
+
+  return fig
+
+def draw_heat_map(df):
+  """
+  Creates a heatmap showing the correlation matrix of the data.
+
+  Args:
+      df: Pandas DataFrame containing medical examination data.
+
+  Returns:
+      A seaborn heatmap figure.
+  """
+
+  df_clean = clean_data(df.copy())
+  corr = df_clean.corr()
+  mask = np.triu(np.ones_like(corr, dtype=bool))
+
+  fig, ax = plt.subplots(figsize=(10, 6))
+  sns.heatmap(corr, mask=mask, annot=True, ax=ax)
+  ax.set_title('Correlation Matrix')
+
+  return fig
+
+# Load data (replace with your data path)
+df = pd.read_csv('medical_examination.csv')
+
+# Add overweight column
+df = calculate_bmi(df)
+df['overweight'] = df['bmi'].apply(lambda x: 1 if x > 25 else 0)
+
+# Normalize data
+df = normalize_data(df)
+
+# Cat plot
+fig_cat = draw_cat_plot(df.copy())
+fig_cat.savefig('cat_plot.png')
+plt.close(fig_cat)
+
+# Heat map
+fig_heat = draw_heat_map(df.copy())
+fig_heat.savefig('heat_map.png')
+plt.close(fig_heat)
